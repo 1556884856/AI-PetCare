@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="PetCare.Api/PetCare.Api.csproj" />
+  <Project Path="PetCare.Core/PetCare.Core.csproj" />
+  <Project Path="PetCare.Data/PetCare.Data.csproj" />
+  <Project Path="PetCare.Service/PetCare.Service.csproj" />
+</Solution>

@@ -1,0 +1,15 @@
+﻿namespace PetCare.Core.Entities;
+
+public class User
+{
+    public int Id { get; set; }
+    public string Phone { get; set; } = string.Empty;
+    public string Nickname { get; set; } = string.Empty;
+    public string AvatarUrl { get; set; } = string.Empty;
+    public int Role { get; set; } = 0;
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
+    public ICollection<Pet> Pets { get; set; } = new List<Pet>();
+    public ICollection<Appointment> Appointments { get; set; } = new List<Appointment>();
+    public ICollection<Review> Reviews { get; set; } = new List<Review>();
+}

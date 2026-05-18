@@ -1,0 +1,33 @@
+﻿:root {
+  --primary: #0F766E;
+  --primary-light: #0D9488;
+  --primary-bg: #E6F7F5;
+  --secondary: #F59E0B;
+  --accent: #059669;
+  --bg: #FFFBEB;
+  --card: #FFFFFF;
+  --text: #1C1917;
+  --muted: #78716C;
+  --border: #E7E5E4;
+  --danger: #DC2626;
+  --radius-sm: 10px;
+  --radius-md: 16px;
+  --radius-lg: 20px;
+  --radius-full: 9999px;
+  --shadow-card: 0 2px 16px rgba(0,0,0,0.06);
+  --transition: 200ms ease-out;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: 'Nunito Sans', sans-serif;
+  font-size: 16px;
+  color: var(--text);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3, h4 { font-family: 'Varela Round', sans-serif; }
+
+a { text-decoration: none; color: inherit; }
