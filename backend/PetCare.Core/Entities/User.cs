@@ -12,4 +12,7 @@ public class User
     public ICollection<Pet> Pets { get; set; } = new List<Pet>();
     public ICollection<Appointment> Appointments { get; set; } = new List<Appointment>();
     public ICollection<Review> Reviews { get; set; } = new List<Review>();
+    public ICollection<Notification> Notifications { get; set; } = new List<Notification>();
+    public ICollection<UserCoupon> UserCoupons { get; set; } = new List<UserCoupon>();
+    public ICollection<Payment> Payments { get; set; } = new List<Payment>();
 }

@@ -1,6 +1,7 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using PetCare.Core.Dtos;
 using PetCare.Core.Entities;
+using PetCare.Core.Events;
 using PetCare.Core.Interfaces;
 using PetCare.Data;
 
@@ -9,7 +10,8 @@ namespace PetCare.Service;
 public class AppointmentService : IAppointmentService
 {
     private readonly PetCareDbContext _db;
-    public AppointmentService(PetCareDbContext db) { _db = db; }
+    private readonly IMessageBus _messageBus;
+    public AppointmentService(PetCareDbContext db, IMessageBus messageBus) { _db = db; _messageBus = messageBus; }
 
     public async Task<List<AppointmentDto>> GetUserAppointmentsAsync(int userId, int? status)
     {
@@ -37,6 +39,11 @@ public class AppointmentService : IAppointmentService
         };
         _db.Appointments.Add(app);
         await _db.SaveChangesAsync();
+
+        // 发布预约创建事件 → 通知系统异步处理
+        _messageBus.Publish("appointment.created", new AppointmentCreatedEvent(
+            app.Id, userId, pet.Name, service.Name, app.AppointmentDate, app.TimeSlot
+        ));
 
         return new AppointmentDto(app.Id, app.UserId, app.PetId, app.ServiceId, app.AppointmentDate, app.TimeSlot, app.Status, app.Notes, app.CreatedAt,
             pet.Name, pet.Type, service.Name, service.Price, null, null);

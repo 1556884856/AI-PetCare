@@ -1,10 +1,12 @@
-锘縰sing System.Text;
+using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using PetCare.Core.Interfaces;
 using PetCare.Data;
 using PetCare.Service;
+using PetCare.Service.RabbitMQ;
+using PetCare.Service.Redis;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -56,10 +58,23 @@ builder.Services.AddCors(options =>
 builder.Services.AddDbContext<PetCareDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
 
+// RabbitMQ & Redis
+builder.Services.AddSingleton<RabbitMQConnection>();
+builder.Services.AddSingleton<RedisConnection>();
+builder.Services.AddSingleton<IMessageBus, MessageBus>();
+
+// RabbitMQ Consumers (BackgroundService)
+builder.Services.AddHostedService<NotificationConsumer>();
+builder.Services.AddHostedService<PaymentTimeoutConsumer>();
+
+// Services
 builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.AddScoped<IPetService, PetService>();
 builder.Services.AddScoped<IAppointmentService, AppointmentService>();
 builder.Services.AddScoped<IAdminService, AdminService>();
+builder.Services.AddScoped<INotificationService, NotificationService>();
+builder.Services.AddScoped<ICouponService, CouponService>();
+builder.Services.AddScoped<IPaymentService, PaymentService>();
 
 var app = builder.Build();
 
@@ -67,6 +82,17 @@ using (var scope = app.Services.CreateScope())
 {
     var db = scope.ServiceProvider.GetRequiredService<PetCareDbContext>();
     db.Database.EnsureCreated();
+    if (!db.Users.Any(u => u.Phone == "admin"))
+    {
+        db.Users.Add(new PetCare.Core.Entities.User
+        {
+            Phone = "admin",
+            Nickname = "系统管理员",
+            Role = 2,
+            CreatedAt = DateTime.UtcNow
+        });
+        db.SaveChanges();
+    }
 }
 
 if (app.Environment.IsDevelopment())

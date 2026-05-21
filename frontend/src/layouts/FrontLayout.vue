@@ -9,10 +9,12 @@
         <nav class="nav">
           <router-link to="/services">服务项目</router-link>
           <router-link to="/booking">在线预约</router-link>
+          <router-link to="/coupons">领券中心</router-link>
         </nav>
         <div class="header-actions">
           <a v-if="auth.isAdmin()" href="/admin" target="_blank" class="admin-link">⚙ 后台管理</a>
           <template v-if="auth.isLoggedIn()">
+            <NotificationBell />
             <el-dropdown>
               <span class="user-btn">
                 <el-avatar :size="32" icon="UserFilled" />
@@ -23,6 +25,9 @@
                   <el-dropdown-item @click="$router.push('/me')">个人中心</el-dropdown-item>
                   <el-dropdown-item @click="$router.push('/me/pets')">我的宠物</el-dropdown-item>
                   <el-dropdown-item @click="$router.push('/me/appointments')">我的预约</el-dropdown-item>
+                  <el-dropdown-item @click="$router.push('/me/coupons')">我的优惠券</el-dropdown-item>
+                  <el-dropdown-item @click="$router.push('/me/payments')">支付记录</el-dropdown-item>
+                  <el-dropdown-item @click="$router.push('/me/notifications')">消息通知</el-dropdown-item>
                   <el-dropdown-item v-if="auth.isAdmin()" @click="openAdmin" divided>后台管理</el-dropdown-item>
                   <el-dropdown-item @click="handleLogout" divided>退出登录</el-dropdown-item>
                 </el-dropdown-menu>
@@ -55,6 +60,7 @@ import { onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/stores/auth'
 import { getMe } from '@/api/auth'
+import NotificationBell from '@/components/NotificationBell.vue'
 
 const auth = useAuthStore()
 const router = useRouter()

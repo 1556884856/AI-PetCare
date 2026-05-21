@@ -39,3 +39,6 @@ stdout.txt
 
 # User-specific
 *.rsuser
+
+# Crash dumps
+erl_crash.dump

@@ -88,12 +88,29 @@
           <div class="confirm-row"><span>预约时段</span><strong>{{ selectedSlot }}</strong></div>
           <div class="confirm-row"><span>预计金额</span><strong class="price">¥{{ selectedService?.price }}</strong></div>
         </div>
+
+        <div class="coupon-section" v-if="myCoupons.length > 0">
+          <h3>选择优惠券</h3>
+          <el-select v-model="selectedCouponId" placeholder="不使用优惠券" clearable style="width: 100%;">
+            <el-option
+              v-for="c in myCoupons"
+              :key="c.id"
+              :label="couponLabel(c)"
+              :value="c.id"
+              :disabled="!isCouponValid(c)"
+            />
+          </el-select>
+          <div v-if="selectedCouponId" class="coupon-discount">
+            预计优惠：<strong>-¥{{ calcDiscount }}</strong>
+          </div>
+        </div>
+
         <div class="notes-input">
           <el-input v-model="notes" type="textarea" :rows="2" placeholder="备注（选填）：如狗狗怕水、有皮肤病等特殊情况..." />
         </div>
         <div class="step-actions">
           <el-button @click="step = 1">上一步</el-button>
-          <el-button type="warning" size="large" :loading="submitting" @click="submitBooking">✓ 确认预约</el-button>
+          <el-button type="warning" size="large" :loading="submitting" @click="submitBooking">✓ 确认预约并支付</el-button>
         </div>
       </div>
     </div>
@@ -108,7 +125,7 @@
           </el-radio-group>
         </el-form-item>
         <el-form-item label="品种"><el-input v-model="newPet.breed" placeholder="如：金毛、英短" /></el-form-item>
-        <el-form-item label="年龄（月）"><el-input-number v-model="newPet.age" :min="1" :max="240" /></el-form-item>
+        <el-form-item label="年龄（月）"><el-input-number v-model="newPet.age" :min="1" :step="1" /></el-form-item>
         <el-form-item label="体重（kg）"><el-input-number v-model="newPet.weight" :min="0.5" :step="0.5" /></el-form-item>
         <el-form-item label="备注"><el-input v-model="newPet.notes" placeholder="特殊情况说明" /></el-form-item>
       </el-form>
@@ -126,6 +143,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { getServices } from '@/api/services'
 import { getMyPets, createPet } from '@/api/pets'
 import { createAppointment } from '@/api/appointments'
+import { getMyCoupons } from '@/api/coupons'
 import { ElMessage } from 'element-plus'
 
 const route = useRoute()
@@ -134,10 +152,12 @@ const router = useRouter()
 const step = ref(0)
 const services = ref<any[]>([])
 const pets = ref<any[]>([])
+const myCoupons = ref<any[]>([])
 const selectedService = ref<any>(null)
 const selectedPet = ref<any>(null)
 const selectedDate = ref('')
 const selectedSlot = ref('')
+const selectedCouponId = ref<number | null>(null)
 const notes = ref('')
 const submitting = ref(false)
 const showAddPet = ref(false)
@@ -157,12 +177,14 @@ const disabledDate = (date: Date) => {
 }
 
 onMounted(async () => {
-  const [sRes, pRes] = await Promise.all([
+  const [sRes, pRes, cRes] = await Promise.all([
     getServices(),
-    getMyPets().catch(() => ({ data: [] }))
+    getMyPets().catch(() => ({ data: [] })),
+    getMyCoupons('unused').catch(() => ({ data: [] }))
   ])
   services.value = (sRes as any).data || []
   pets.value = (pRes as any).data || []
+  myCoupons.value = (cRes as any).data || []
 
   const serviceId = route.query.serviceId
   if (serviceId) {
@@ -180,18 +202,38 @@ const addPet = async () => {
   } catch {}
 }
 
+const isCouponValid = (c: any) => {
+  if (!selectedService.value) return false
+  return c.minOrderAmount <= selectedService.value.price
+}
+
+const couponLabel = (c: any) => {
+  const val = c.type === 0 ? `¥${c.value}` : `${(c.value * 10).toFixed(1)}折`
+  const cond = c.minOrderAmount > 0 ? `满¥${c.minOrderAmount}` : '无门槛'
+  return `${c.couponName} (${val} ${cond})`
+}
+
+const calcDiscount = computed(() => {
+  if (!selectedCouponId.value || !selectedService.value) return '0.00'
+  const coupon = myCoupons.value.find(c => c.id === selectedCouponId.value)
+  if (!coupon) return '0.00'
+  if (coupon.type === 0) return coupon.value.toFixed(2)
+  return (selectedService.value.price * (1 - coupon.value)).toFixed(2)
+})
+
 const submitBooking = async () => {
   submitting.value = true
   try {
-    await createAppointment({
+    const res: any = await createAppointment({
       serviceId: selectedService.value.id,
       petId: selectedPet.value.id,
       appointmentDate: selectedDate.value,
       timeSlot: selectedSlot.value,
       notes: notes.value
     })
-    ElMessage.success('预约成功！')
-    router.push('/me/appointments')
+    const appointmentId = res.data.id
+    ElMessage.success('预约成功，即将跳转到支付页面...')
+    router.push({ path: '/payment', query: { appointmentId, couponId: selectedCouponId.value ?? undefined } })
   } catch {} finally {
     submitting.value = false
   }
@@ -238,5 +280,8 @@ const submitBooking = async () => {
 .confirm-row span { color: var(--muted); }
 .load-more { text-align: center; margin-top: 20px; }
 .notes-input { margin-top: 20px; }
+.coupon-section { margin-top: 20px; }
+.coupon-section h3 { font-size: 16px; margin-bottom: 10px; }
+.coupon-discount { margin-top: 10px; font-size: 14px; color: var(--secondary); text-align: right; }
 @media (max-width: 768px) { .choose-list { grid-template-columns: 1fr; } .choose-list.mini { grid-template-columns: repeat(2, 1fr); } }
 </style>
