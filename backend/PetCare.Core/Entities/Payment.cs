@@ -1,4 +1,5 @@
-﻿namespace PetCare.Core.Entities;
+using PetCare.Core.Enums;
+namespace PetCare.Core.Entities;
 
 public class Payment
 {
@@ -9,10 +10,8 @@ public class Payment
     public decimal DiscountAmount { get; set; }
     public decimal FinalAmount { get; set; }
     public int? CouponId { get; set; }
-    /// <summary>0=待支付 1=已支付 2=已退款</summary>
-    public int Status { get; set; } = 0;
-    /// <summary>0=微信 1=支付宝 2=到店付</summary>
-    public int PayMethod { get; set; }
+    public PaymentStatus Status { get; set; } = PaymentStatus.Pending;
+    public PaymentMethod PayMethod { get; set; }
     public DateTime? PaidAt { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 

@@ -5,6 +5,7 @@ using PetCare.Core.Entities;
 using PetCare.Core.Events;
 using PetCare.Core.Interfaces;
 using PetCare.Data;
+using PetCare.Core.Enums;
 using PetCare.Service.Redis;
 
 namespace PetCare.Service;
@@ -27,34 +28,34 @@ public class PaymentService : IPaymentService
         var appointment = await _db.Appointments
             .Include(a => a.Service).Include(a => a.Pet)
             .FirstOrDefaultAsync(a => a.Id == r.AppointmentId && a.UserId == userId)
-            ?? throw new Exception("Ô¤Ô¼²»´æÔÚ");
+            ?? throw new Exception("Ô¤Ô¼ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½");
 
         var existing = await _db.Payments.AnyAsync(p => p.AppointmentId == r.AppointmentId);
-        if (existing) throw new Exception("¸ÃÔ¤Ô¼ÒÑÓÐÖ§¸¶µ¥");
+        if (existing) throw new Exception("ï¿½ï¿½Ô¤Ô¼ï¿½ï¿½ï¿½ï¿½Ö§ï¿½ï¿½ï¿½ï¿½");
 
         var amount = appointment.Service.Price;
         var discountAmount = 0m;
         var finalAmount = amount;
         int? couponId = null;
 
-        // Ó¦ÓÃÓÅ»ÝÈ¯
+        // Ó¦ï¿½ï¿½ï¿½Å»ï¿½È¯
         if (r.CouponId.HasValue)
         {
             var userCoupon = await _db.UserCoupons
                 .Include(uc => uc.Coupon)
                 .FirstOrDefaultAsync(uc => uc.Id == r.CouponId && uc.UserId == userId && !uc.IsUsed)
-                ?? throw new Exception("ÓÅ»ÝÈ¯²»¿ÉÓÃ");
+                ?? throw new Exception("ï¿½Å»ï¿½È¯ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½");
 
             var coupon = userCoupon.Coupon;
-            if (coupon.ValidTo < DateTime.UtcNow) throw new Exception("ÓÅ»ÝÈ¯ÒÑ¹ýÆÚ");
-            if (coupon.MinOrderAmount > amount) throw new Exception($"Î´Âú×îµÍÏû·Ñ £¤{coupon.MinOrderAmount}");
+            if (coupon.ValidTo < DateTime.UtcNow) throw new Exception("ï¿½Å»ï¿½È¯ï¿½Ñ¹ï¿½ï¿½ï¿½");
+            if (coupon.MinOrderAmount > amount) throw new Exception($"Î´ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½{coupon.MinOrderAmount}");
 
             couponId = coupon.Id;
-            if (coupon.Type == 0) // Âú¼õ
+            if ((int)coupon.Type == (int)CouponType.FixedAmount) // ï¿½ï¿½ï¿½ï¿½
             {
                 discountAmount = coupon.Value;
             }
-            else // ÕÛ¿Û
+            else // ï¿½Û¿ï¿½
             {
                 discountAmount = amount - amount * coupon.Value;
             }
@@ -70,23 +71,23 @@ public class PaymentService : IPaymentService
             DiscountAmount = discountAmount,
             FinalAmount = finalAmount,
             CouponId = couponId,
-            PayMethod = r.PayMethod
+            PayMethod = (PaymentMethod)r.PayMethod
         };
         _db.Payments.Add(payment);
         await _db.SaveChangesAsync();
 
-        // ·¢ËÍ³¬Ê±ÑÓ³ÙÏûÏ¢£¨30·ÖÖÓÎ´Ö§¸¶×Ô¶¯È¡Ïû£©
-        _messageBus.Publish("payment.timeout", new PaymentTimeoutEvent(payment.Id, r.AppointmentId, couponId));
+        // ï¿½ï¿½ï¿½Í³ï¿½Ê±ï¿½Ó³ï¿½ï¿½ï¿½Ï¢ï¿½ï¿½30ï¿½ï¿½ï¿½ï¿½Î´Ö§ï¿½ï¿½ï¿½Ô¶ï¿½È¡ï¿½ï¿½ï¿½ï¿½
+        await _messageBus.PublishAsync("payment.timeout", new PaymentTimeoutEvent(payment.Id, r.AppointmentId, couponId));
 
         return MapPayment(payment, appointment.Service.Name, appointment.Pet.Name);
     }
 
     public async Task<PaymentDto> MockPayAsync(int userId, int paymentId)
     {
-        // Redis ·ÀÖØËø
+        // Redis ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
         var lockKey = $"payment:lock:{paymentId}";
         var acquired = await _redis.Database.StringSetAsync(lockKey, "1", TimeSpan.FromSeconds(30), StackExchange.Redis.When.NotExists);
-        if (!acquired) throw new Exception("Ö§¸¶´¦ÀíÖÐ£¬ÇëÎðÖØ¸´²Ù×÷");
+        if (!acquired) throw new Exception("Ö§ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ð£ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ø¸ï¿½ï¿½ï¿½ï¿½ï¿½");
 
         try
         {
@@ -94,17 +95,17 @@ public class PaymentService : IPaymentService
                 .Include(p => p.Appointment).ThenInclude(a => a.Service)
                 .Include(p => p.Appointment).ThenInclude(a => a.Pet)
                 .FirstOrDefaultAsync(p => p.Id == paymentId && p.UserId == userId)
-                ?? throw new Exception("Ö§¸¶µ¥²»´æÔÚ");
+                ?? throw new Exception("Ö§ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½");
 
-            if (payment.Status != 0) throw new Exception("Ö§¸¶µ¥×´Ì¬Òì³£");
+            if (payment.Status != PaymentStatus.Pending) throw new Exception("Ö§ï¿½ï¿½ï¿½ï¿½×´Ì¬ï¿½ì³£");
 
-            // Ä£ÄâÖ§¸¶ÑÓ³Ù
+            // Ä£ï¿½ï¿½Ö§ï¿½ï¿½ï¿½Ó³ï¿½
             await Task.Delay(1500);
 
-            payment.Status = 1; // ÒÑÖ§¸¶
+            payment.Status = PaymentStatus.Paid; // ï¿½ï¿½Ö§ï¿½ï¿½
             payment.PaidAt = DateTime.UtcNow;
 
-            // ±ê¼ÇÓÅ»ÝÈ¯ÒÑÊ¹ÓÃ
+            // ï¿½ï¿½ï¿½ï¿½Å»ï¿½È¯ï¿½ï¿½Ê¹ï¿½ï¿½
             if (payment.CouponId.HasValue)
             {
                 var userCoupon = await _db.UserCoupons
@@ -116,13 +117,13 @@ public class PaymentService : IPaymentService
                 }
             }
 
-            // ¸üÐÂÔ¤Ô¼×´Ì¬ÎªÒÑÈ·ÈÏ
-            payment.Appointment.Status = 1;
+            // ï¿½ï¿½ï¿½ï¿½Ô¤Ô¼×´Ì¬Îªï¿½ï¿½È·ï¿½ï¿½
+            payment.Appointment.Status = AppointmentStatus.Confirmed;
 
             await _db.SaveChangesAsync();
 
-            // ·¢ËÍÖ§¸¶³É¹¦ÊÂ¼þ£¬´¥·¢Í¨Öª
-            _messageBus.Publish("payment.completed", new PaymentCompletedEvent(payment.Id, payment.AppointmentId, userId, payment.FinalAmount));
+            // ï¿½ï¿½ï¿½ï¿½Ö§ï¿½ï¿½ï¿½É¹ï¿½ï¿½Â¼ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Í¨Öª
+            await _messageBus.PublishAsync("payment.completed", new PaymentCompletedEvent(payment.Id, payment.AppointmentId, userId, payment.FinalAmount));
 
             return MapPayment(payment, payment.Appointment.Service.Name, payment.Appointment.Pet.Name);
         }
@@ -138,14 +139,14 @@ public class PaymentService : IPaymentService
             .Include(p => p.Appointment).ThenInclude(a => a.Service)
             .Include(p => p.Appointment).ThenInclude(a => a.Pet)
             .FirstOrDefaultAsync(p => p.Id == paymentId)
-            ?? throw new Exception("Ö§¸¶µ¥²»´æÔÚ");
+            ?? throw new Exception("Ö§ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½");
 
-        if (payment.Status != 1) throw new Exception("½öÒÑÖ§¸¶¶©µ¥¿ÉÍË¿î");
+        if (payment.Status != PaymentStatus.Paid) throw new Exception("ï¿½ï¿½ï¿½ï¿½Ö§ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ë¿ï¿½");
 
-        payment.Status = 2; // ÒÑÍË¿î
-        payment.Appointment.Status = 3; // Ô¤Ô¼È¡Ïû
+        payment.Status = PaymentStatus.Refunded; // ï¿½ï¿½ï¿½Ë¿ï¿½
+        payment.Appointment.Status = AppointmentStatus.Cancelled; // Ô¤Ô¼È¡ï¿½ï¿½
 
-        // ÍË»¹ÓÅ»ÝÈ¯
+        // ï¿½Ë»ï¿½ï¿½Å»ï¿½È¯
         if (payment.CouponId.HasValue)
         {
             var userCoupon = await _db.UserCoupons
@@ -177,7 +178,7 @@ public class PaymentService : IPaymentService
             .Include(p => p.Appointment).ThenInclude(a => a.Service)
             .Include(p => p.Appointment).ThenInclude(a => a.Pet)
             .OrderByDescending(p => p.CreatedAt)
-            .Select(p => new PaymentDto(p.Id, p.AppointmentId, p.UserId, p.Amount, p.DiscountAmount, p.FinalAmount, p.CouponId, p.Status, p.PayMethod, p.PaidAt, p.CreatedAt, p.Appointment.Service.Name, p.Appointment.Pet.Name))
+            .Select(p => new PaymentDto(p.Id, p.AppointmentId, p.UserId, p.Amount, p.DiscountAmount, p.FinalAmount, p.CouponId, (int)p.Status, (int)p.PayMethod, p.PaidAt, p.CreatedAt, p.Appointment.Service.Name, p.Appointment.Pet.Name))
             .ToListAsync();
     }
 
@@ -187,12 +188,12 @@ public class PaymentService : IPaymentService
             .Include(p => p.Appointment).ThenInclude(a => a.Service)
             .Include(p => p.Appointment).ThenInclude(a => a.Pet)
             .OrderByDescending(p => p.CreatedAt)
-            .Select(p => new PaymentDto(p.Id, p.AppointmentId, p.UserId, p.Amount, p.DiscountAmount, p.FinalAmount, p.CouponId, p.Status, p.PayMethod, p.PaidAt, p.CreatedAt, p.Appointment.Service.Name, p.Appointment.Pet.Name))
+            .Select(p => new PaymentDto(p.Id, p.AppointmentId, p.UserId, p.Amount, p.DiscountAmount, p.FinalAmount, p.CouponId, (int)p.Status, (int)p.PayMethod, p.PaidAt, p.CreatedAt, p.Appointment.Service.Name, p.Appointment.Pet.Name))
             .ToListAsync();
     }
 
     private static PaymentDto MapPayment(Payment p, string serviceName, string petName)
     {
-        return new PaymentDto(p.Id, p.AppointmentId, p.UserId, p.Amount, p.DiscountAmount, p.FinalAmount, p.CouponId, p.Status, p.PayMethod, p.PaidAt, p.CreatedAt, serviceName, petName);
+        return new PaymentDto(p.Id, p.AppointmentId, p.UserId, p.Amount, p.DiscountAmount, p.FinalAmount, p.CouponId, (int)p.Status, (int)p.PayMethod, p.PaidAt, p.CreatedAt, serviceName, petName);
     }
 }

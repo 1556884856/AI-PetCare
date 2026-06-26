@@ -4,7 +4,7 @@ using PetCare.Core.Interfaces;
 namespace PetCare.Api.Controllers;
 
 [ApiController]
-[Route("api/[controller]")]
+[Route("api/v1/[controller]")]
 public class ServicesController : ControllerBase
 {
     private readonly IAdminService _adminService;

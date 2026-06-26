@@ -1,21 +1,24 @@
-﻿using System.IdentityModel.Tokens.Jwt;
+using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Text;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using PetCare.Core.Dtos;
 using PetCare.Core.Entities;
+using PetCare.Core.Enums;
 using PetCare.Core.Interfaces;
 using PetCare.Data;
+
+using Microsoft.Extensions.Configuration;
 
 namespace PetCare.Service;
 
 public class UserService : IUserService
 {
     private readonly PetCareDbContext _db;
-    private const string SecretKey = "PetCareSecretKey2026ForJwtTokenGeneration!";
+    private readonly IConfiguration _config;
 
-    public UserService(PetCareDbContext db) { _db = db; }
+    public UserService(PetCareDbContext db, IConfiguration config) { _db = db; _config = config; }
 
     public Task SendCodeAsync(string phone)
     {
@@ -29,7 +32,7 @@ public class UserService : IUserService
         var user = await _db.Users.FirstOrDefaultAsync(u => u.Phone == phone);
         if (user == null)
         {
-            user = new User { Phone = phone, Nickname = "用户" + phone[^4..], Role = 0, CreatedAt = DateTime.UtcNow };
+            user = new User { Phone = phone, Nickname = "用户" + phone[^4..], Role = UserRole.Customer, CreatedAt = DateTime.UtcNow };
             _db.Users.Add(user);
             await _db.SaveChangesAsync();
         }
@@ -52,11 +55,13 @@ public class UserService : IUserService
         return Map(user);
     }
 
-    private static UserDto Map(User u) => new(u.Id, u.Phone, u.Nickname, u.AvatarUrl, u.Role);
+    private static UserDto Map(User u) => new(u.Id, u.Phone, u.Nickname, u.AvatarUrl, (int)u.Role);
 
-    private static string GenerateJwt(User u)
+    private string GenerateJwt(User u)
     {
-        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(SecretKey));
+        var jwtKey = _config["Jwt:Key"] ?? "PetCareSecretKey2026ForJwtTokenGeneration!";
+
+        var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey));
         var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
         var claims = new[]
         {

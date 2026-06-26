@@ -1,24 +1,15 @@
-﻿using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Configuration;
 using RabbitMQ.Client;
 
 namespace PetCare.Service.RabbitMQ;
 
-public class RabbitMQConnection : IDisposable
+public class RabbitMQConnection : IAsyncDisposable
 {
     private readonly ConnectionFactory _factory;
     private readonly string _exchangeName;
     private IConnection? _connection;
-    private IModel? _channel;
-    private readonly object _lock = new();
-
-    public IModel Channel
-    {
-        get
-        {
-            EnsureConnected();
-            return _channel!;
-        }
-    }
+    private IChannel? _channel;
+    private readonly SemaphoreSlim _lock = new(1, 1);
 
     public RabbitMQConnection(IConfiguration configuration)
     {
@@ -28,33 +19,36 @@ public class RabbitMQConnection : IDisposable
             Port = int.Parse(configuration["RabbitMQ:Port"] ?? "5672"),
             UserName = configuration["RabbitMQ:UserName"] ?? "guest",
             Password = configuration["RabbitMQ:Password"] ?? "guest",
-            DispatchConsumersAsync = true
+            
         };
         _exchangeName = configuration["RabbitMQ:ExchangeName"] ?? "petcare.events";
     }
 
-    private void EnsureConnected()
+    public async Task<IChannel> GetChannelAsync(CancellationToken ct = default)
     {
-        if (_channel != null && _channel.IsOpen) return;
+        if (_channel != null) return _channel;
 
-        lock (_lock)
+        await _lock.WaitAsync(ct);
+        try
         {
-            if (_channel != null && _channel.IsOpen) return;
+            if (_channel != null) return _channel;
 
-            _channel?.Dispose();
-            _connection?.Dispose();
+            if (_channel != null) { await _channel.CloseAsync(ct); await _channel.DisposeAsync(); }
+            if (_connection != null) { await _connection.CloseAsync(ct); await _connection.DisposeAsync(); }
 
-            _connection = _factory.CreateConnection();
-            _channel = _connection.CreateModel();
-            _channel.ExchangeDeclare(_exchangeName, ExchangeType.Topic, durable: true, autoDelete: false);
+            _connection = await _factory.CreateConnectionAsync(ct);
+            _channel = await _connection.CreateChannelAsync(cancellationToken: ct);
+            await _channel.ExchangeDeclareAsync(_exchangeName, ExchangeType.Topic, durable: true, autoDelete: false, cancellationToken: ct);
         }
+        finally { _lock.Release(); }
+        return _channel;
     }
 
-    public bool TryConnect()
+    public async Task<bool> TryConnectAsync()
     {
         try
         {
-            EnsureConnected();
+            await GetChannelAsync();
             return true;
         }
         catch
@@ -63,11 +57,10 @@ public class RabbitMQConnection : IDisposable
         }
     }
 
-    public void Dispose()
+    public async ValueTask DisposeAsync()
     {
-        _channel?.Close();
-        _channel?.Dispose();
-        _connection?.Close();
-        _connection?.Dispose();
+        if (_channel != null) { await _channel.CloseAsync(); await _channel.DisposeAsync(); }
+        if (_connection != null) { await _connection.CloseAsync(); await _connection.DisposeAsync(); }
+        _lock.Dispose();
     }
 }

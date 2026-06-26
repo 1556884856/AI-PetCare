@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using PetCare.Core.Dtos;
 using PetCare.Core.Entities;
 using PetCare.Core.Interfaces;

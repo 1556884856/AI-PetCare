@@ -1,6 +1,18 @@
-﻿version: '3.8'
+version: '3.8'
 
 services:
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: petcare-sqlserver
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: "PetCare@2024"
+      MSSQL_PID: Developer
+    ports:
+      - "1433:1433"
+    volumes:
+      - sqlserver_data:/var/opt/mssql
+
   rabbitmq:
     image: rabbitmq:3-management
     container_name: petcare-rabbitmq
@@ -22,6 +34,24 @@ services:
       - redis_data:/data
     command: redis-server --appendonly yes
 
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: petcare-api
+    ports:
+      - "5000:8080"
+    depends_on:
+      - sqlserver
+      - rabbitmq
+      - redis
+    environment:
+      ConnectionStrings__DefaultConnection: "Server=sqlserver;Database=PetCareDb;User Id=sa;Password=PetCare@2024;TrustServerCertificate=true;MultipleActiveResultSets=true"
+      RabbitMQ__HostName: rabbitmq
+      Redis__ConnectionString: redis:6379
+      ASPNETCORE_ENVIRONMENT: Development
+
 volumes:
+  sqlserver_data:
   rabbitmq_data:
   redis_data:

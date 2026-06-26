@@ -1,4 +1,8 @@
+using PetCare.Core.Enums;
+using PetCare.Data.Repositories;
+using PetCare.Core.Interfaces;
 using System.Text;
+using Microsoft.Extensions.Hosting;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -7,6 +11,8 @@ using PetCare.Data;
 using PetCare.Service;
 using PetCare.Service.RabbitMQ;
 using PetCare.Service.Redis;
+
+using PetCare.Api.Middleware;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -67,6 +73,12 @@ builder.Services.AddSingleton<IMessageBus, MessageBus>();
 builder.Services.AddHostedService<NotificationConsumer>();
 builder.Services.AddHostedService<PaymentTimeoutConsumer>();
 
+// Repositories
+builder.Services.AddScoped(typeof(IRepository<>), typeof(Repository<>));
+
+// AutoMapper
+builder.Services.AddAutoMapper(typeof(PetCare.Service.MappingProfile).Assembly);
+
 // Services
 builder.Services.AddScoped<IUserService, UserService>();
 builder.Services.AddScoped<IPetService, PetService>();
@@ -75,6 +87,8 @@ builder.Services.AddScoped<IAdminService, AdminService>();
 builder.Services.AddScoped<INotificationService, NotificationService>();
 builder.Services.AddScoped<ICouponService, CouponService>();
 builder.Services.AddScoped<IPaymentService, PaymentService>();
+
+builder.Services.Configure<HostOptions>(options => options.BackgroundServiceExceptionBehavior = BackgroundServiceExceptionBehavior.Ignore);
 
 var app = builder.Build();
 
@@ -87,8 +101,8 @@ using (var scope = app.Services.CreateScope())
         db.Users.Add(new PetCare.Core.Entities.User
         {
             Phone = "admin",
-            Nickname = "系统管理员",
-            Role = 2,
+            Nickname = "Admin",
+            Role = UserRole.Admin,
             CreatedAt = DateTime.UtcNow
         });
         db.SaveChanges();

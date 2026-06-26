@@ -5,6 +5,7 @@ using PetCare.Core.Entities;
 using PetCare.Core.Events;
 using PetCare.Core.Interfaces;
 using PetCare.Data;
+using PetCare.Core.Enums;
 using PetCare.Service.Redis;
 
 namespace PetCare.Service;
@@ -33,7 +34,7 @@ public class CouponService : ICouponService
         _db.Coupons.Add(coupon);
         await _db.SaveChangesAsync();
 
-        // ³õÊ¼»¯ Redis ¿â´æ
+        // ï¿½ï¿½Ê¼ï¿½ï¿½ Redis ï¿½ï¿½ï¿½
         await _redis.Database.StringSetAsync($"coupon:stock:{coupon.Id}", coupon.TotalQuantity);
 
         return MapCoupon(coupon);
@@ -45,13 +46,13 @@ public class CouponService : ICouponService
         return coupons.Select(c =>
         {
             var used = _db.UserCoupons.Count(uc => uc.CouponId == c.Id);
-            return new CouponDto(c.Id, c.Name, c.Type, c.Value, c.MinOrderAmount, c.ValidFrom, c.ValidTo, c.TotalQuantity, used, c.IsActive, c.CreatedAt);
+            return new CouponDto(c.Id, c.Name, (int)c.Type, c.Value, c.MinOrderAmount, c.ValidFrom, c.ValidTo, c.TotalQuantity, used, c.IsActive, c.CreatedAt);
         }).ToList();
     }
 
     public async Task<CouponDto> UpdateCouponAsync(int id, UpdateCouponRequest r)
     {
-        var c = await _db.Coupons.FindAsync(id) ?? throw new Exception("ÓÅ»ÝÈ¯²»´æÔÚ");
+        var c = await _db.Coupons.FindAsync(id) ?? throw new Exception("ï¿½Å»ï¿½È¯ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½");
         c.Name = r.Name; c.Type = r.Type; c.Value = r.Value;
         c.MinOrderAmount = r.MinOrderAmount; c.ValidFrom = r.ValidFrom;
         c.ValidTo = r.ValidTo; c.TotalQuantity = r.TotalQuantity; c.IsActive = r.IsActive;
@@ -61,12 +62,12 @@ public class CouponService : ICouponService
         await _redis.Database.KeyDeleteAsync("coupon:available");
 
         var used = await _db.UserCoupons.CountAsync(uc => uc.CouponId == c.Id);
-        return new CouponDto(c.Id, c.Name, c.Type, c.Value, c.MinOrderAmount, c.ValidFrom, c.ValidTo, c.TotalQuantity, used, c.IsActive, c.CreatedAt);
+        return new CouponDto(c.Id, c.Name, (int)c.Type, c.Value, c.MinOrderAmount, c.ValidFrom, c.ValidTo, c.TotalQuantity, used, c.IsActive, c.CreatedAt);
     }
 
     public async Task DeleteCouponAsync(int id)
     {
-        var c = await _db.Coupons.FindAsync(id) ?? throw new Exception("ÓÅ»ÝÈ¯²»´æÔÚ");
+        var c = await _db.Coupons.FindAsync(id) ?? throw new Exception("ï¿½Å»ï¿½È¯ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½");
         _db.Coupons.Remove(c);
         await _db.SaveChangesAsync();
         await _redis.Database.KeyDeleteAsync($"coupon:stock:{id}");
@@ -75,7 +76,7 @@ public class CouponService : ICouponService
 
     public async Task DistributeCouponAsync(int couponId, int[] userIds)
     {
-        var coupon = await _db.Coupons.FindAsync(couponId) ?? throw new Exception("ÓÅ»ÝÈ¯²»´æÔÚ");
+        var coupon = await _db.Coupons.FindAsync(couponId) ?? throw new Exception("ï¿½Å»ï¿½È¯ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½");
 
         foreach (var userId in userIds)
         {
@@ -86,8 +87,8 @@ public class CouponService : ICouponService
         }
         await _db.SaveChangesAsync();
 
-        // Òì²½Í¨Öª
-        _messageBus.Publish("coupon.received", new CouponReceivedEvent(0, coupon.Name, coupon.Value));
+        // ï¿½ì²½Í¨Öª
+        await _messageBus.PublishAsync("coupon.received", new CouponReceivedEvent(0, coupon.Name, coupon.Value));
     }
 
     public async Task<List<CouponDto>> GetAvailableCouponsAsync(int userId)
@@ -107,7 +108,7 @@ public class CouponService : ICouponService
             var stock = await _redis.Database.StringGetAsync(stockKey);
             var remaining = stock.HasValue ? int.Parse(stock) : c.TotalQuantity - used;
 
-            result.Add(new CouponDto(c.Id, c.Name, c.Type, c.Value, c.MinOrderAmount, c.ValidFrom, c.ValidTo, c.TotalQuantity, used, c.IsActive, c.CreatedAt));
+            result.Add(new CouponDto(c.Id, c.Name, (int)c.Type, c.Value, c.MinOrderAmount, c.ValidFrom, c.ValidTo, c.TotalQuantity, used, c.IsActive, c.CreatedAt));
         }
         return result;
     }
@@ -128,7 +129,7 @@ public class CouponService : ICouponService
             query = query.Where(uc => !uc.IsUsed && uc.Coupon.ValidTo < now);
 
         return await query.OrderByDescending(uc => uc.CreatedAt).Select(uc => new UserCouponDto(
-            uc.Id, uc.CouponId, uc.Coupon.Name, uc.Coupon.Type, uc.Coupon.Value,
+            uc.Id, uc.CouponId, uc.Coupon.Name, (int)uc.Coupon.Type, uc.Coupon.Value,
             uc.Coupon.MinOrderAmount, uc.Coupon.ValidFrom, uc.Coupon.ValidTo,
             uc.IsUsed, uc.UsedAt, uc.CreatedAt
         )).ToListAsync();
@@ -138,18 +139,18 @@ public class CouponService : ICouponService
     {
         var lockKey = $"coupon:claim:{userId}:{couponId}";
         var acquired = await _redis.Database.StringSetAsync(lockKey, "1", TimeSpan.FromSeconds(60), StackExchange.Redis.When.NotExists);
-        if (!acquired) throw new Exception("ÇëÎðÖØ¸´ÁìÈ¡");
+        if (!acquired) throw new Exception("ï¿½ï¿½ï¿½ï¿½ï¿½Ø¸ï¿½ï¿½ï¿½È¡");
 
         try
         {
-            var coupon = await _db.Coupons.FindAsync(couponId) ?? throw new Exception("ÓÅ»ÝÈ¯²»´æÔÚ");
+            var coupon = await _db.Coupons.FindAsync(couponId) ?? throw new Exception("ï¿½Å»ï¿½È¯ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½");
             if (!coupon.IsActive || coupon.ValidFrom > DateTime.UtcNow || coupon.ValidTo < DateTime.UtcNow)
-                throw new Exception("ÓÅ»ÝÈ¯²»ÔÚÓÐÐ§ÆÚÄÚ");
+                throw new Exception("ï¿½Å»ï¿½È¯ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Ð§ï¿½ï¿½ï¿½ï¿½");
 
             var already = await _db.UserCoupons.AnyAsync(uc => uc.UserId == userId && uc.CouponId == couponId);
-            if (already) throw new Exception("ÒÑ¾­ÁìÈ¡¹ý¸ÃÓÅ»ÝÈ¯");
+            if (already) throw new Exception("ï¿½Ñ¾ï¿½ï¿½ï¿½È¡ï¿½ï¿½ï¿½ï¿½ï¿½Å»ï¿½È¯");
 
-            // Redis Ô­×Ó¿Û¼õ
+            // Redis Ô­ï¿½Ó¿Û¼ï¿½
             var stockKey = $"coupon:stock:{couponId}";
             var stock = await _redis.Database.StringGetAsync(stockKey);
             if (!stock.HasValue)
@@ -159,13 +160,13 @@ public class CouponService : ICouponService
             if (remaining < 0)
             {
                 await _redis.Database.StringIncrementAsync(stockKey);
-                throw new Exception("ÓÅ»ÝÈ¯ÒÑÇÀ¹â");
+                throw new Exception("ï¿½Å»ï¿½È¯ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½");
             }
 
             _db.UserCoupons.Add(new UserCoupon { UserId = userId, CouponId = couponId });
             await _db.SaveChangesAsync();
 
-            // Ê§Ð§»º´æ
+            // Ê§Ð§ï¿½ï¿½ï¿½ï¿½
             await _redis.Database.KeyDeleteAsync($"coupon:my:{userId}");
         }
         finally
@@ -176,6 +177,6 @@ public class CouponService : ICouponService
 
     private static CouponDto MapCoupon(Coupon c)
     {
-        return new CouponDto(c.Id, c.Name, c.Type, c.Value, c.MinOrderAmount, c.ValidFrom, c.ValidTo, c.TotalQuantity, 0, c.IsActive, c.CreatedAt);
+        return new CouponDto(c.Id, c.Name, (int)c.Type, c.Value, c.MinOrderAmount, c.ValidFrom, c.ValidTo, c.TotalQuantity, 0, c.IsActive, c.CreatedAt);
     }
 }

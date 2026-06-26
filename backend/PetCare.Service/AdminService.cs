@@ -4,6 +4,7 @@ using PetCare.Core.Entities;
 using PetCare.Core.Events;
 using PetCare.Core.Interfaces;
 using PetCare.Data;
+using PetCare.Core.Enums;
 
 namespace PetCare.Service;
 
@@ -19,8 +20,8 @@ public class AdminService : IAdminService
         var startOfMonth = new DateTime(today.Year, today.Month, 1);
 
         var todayApps = await _db.Appointments.CountAsync(a => a.AppointmentDate.Date == today);
-        var pendingApps = await _db.Appointments.CountAsync(a => a.Status == 0);
-        var todayRevenue = await _db.Payments.Where(p => p.Status == 1 && p.PaidAt.HasValue && p.PaidAt.Value.Date == today).SumAsync(p => p.FinalAmount);
+        var pendingApps = await _db.Appointments.CountAsync(a => a.Status == AppointmentStatus.Pending);
+        var todayRevenue = await _db.Payments.Where(p => (int)p.Status == (int)PaymentStatus.Paid && p.PaidAt.HasValue && p.PaidAt.Value.Date == today).SumAsync(p => p.FinalAmount);
         var monthNew = await _db.Users.CountAsync(u => u.CreatedAt >= startOfMonth);
 
         var todayList = await GetTodayAppointmentsAsync(today);
@@ -65,7 +66,7 @@ public class AdminService : IAdminService
 
     public async Task<ServiceDto> UpdateServiceAsync(int id, UpdateServiceRequest r)
     {
-        var s = await _db.Services.FindAsync(id) ?? throw new Exception("·þÎñ²»´æÔÚ");
+        var s = await _db.Services.FindAsync(id) ?? throw new Exception("ï¿½ï¿½ï¿½ñ²»´ï¿½ï¿½ï¿½");
         s.Name = r.Name; s.Description = r.Description; s.Category = r.Category; s.PetType = r.PetType; s.Price = r.Price; s.DurationMinutes = r.DurationMinutes; s.SortOrder = r.SortOrder; s.IsActive = r.IsActive;
         await _db.SaveChangesAsync();
         return MapService(s);
@@ -73,7 +74,7 @@ public class AdminService : IAdminService
 
     public async Task DeleteServiceAsync(int id)
     {
-        var s = await _db.Services.FindAsync(id) ?? throw new Exception("·þÎñ²»´æÔÚ");
+        var s = await _db.Services.FindAsync(id) ?? throw new Exception("ï¿½ï¿½ï¿½ñ²»´ï¿½ï¿½ï¿½");
         _db.Services.Remove(s);
         await _db.SaveChangesAsync();
     }
@@ -82,39 +83,39 @@ public class AdminService : IAdminService
     {
         var q = _db.Appointments.Include(a => a.User).Include(a => a.Pet).Include(a => a.Service).AsQueryable();
         if (!string.IsNullOrEmpty(date) && DateTime.TryParse(date, out var d)) q = q.Where(a => a.AppointmentDate.Date == d.Date);
-        if (status.HasValue) q = q.Where(a => a.Status == status.Value);
+        if (status.HasValue) q = q.Where(a => (int)a.Status == status.Value);
         return await q.OrderByDescending(a => a.AppointmentDate).ThenBy(a => a.TimeSlot).Select(a => MapAppointment(a)).ToListAsync();
     }
 
     public async Task<AppointmentDto> ConfirmAppointmentAsync(int id)
     {
-        var a = await _db.Appointments.Include(x => x.User).Include(x => x.Pet).Include(x => x.Service).FirstOrDefaultAsync(x => x.Id == id) ?? throw new Exception("Ô¤Ô¼²»´æÔÚ");
-        a.Status = 1;
+        var a = await _db.Appointments.Include(x => x.User).Include(x => x.Pet).Include(x => x.Service).FirstOrDefaultAsync(x => x.Id == id) ?? throw new Exception("Ô¤Ô¼ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½");
+        a.Status = AppointmentStatus.Confirmed;
         await _db.SaveChangesAsync();
 
-        _messageBus.Publish("appointment.status", new AppointmentStatusEvent(a.Id, a.UserId, 1, $"ÄúµÄÔ¤Ô¼£¨{a.Service.Name}£©ÒÑÈ·ÈÏ£¬Çë°´Ê±µ½µê¡£"));
+        await _messageBus.PublishAsync("appointment.status", new AppointmentStatusEvent(a.Id, a.UserId, 1, $"ï¿½ï¿½ï¿½ï¿½Ô¤Ô¼ï¿½ï¿½{a.Service.Name}ï¿½ï¿½ï¿½ï¿½È·ï¿½Ï£ï¿½ï¿½ë°´Ê±ï¿½ï¿½ï¿½ê¡£"));
 
         return MapAppointment(a);
     }
 
     public async Task<AppointmentDto> CompleteAppointmentAsync(int id)
     {
-        var a = await _db.Appointments.Include(x => x.User).Include(x => x.Pet).Include(x => x.Service).FirstOrDefaultAsync(x => x.Id == id) ?? throw new Exception("Ô¤Ô¼²»´æÔÚ");
-        a.Status = 2;
+        var a = await _db.Appointments.Include(x => x.User).Include(x => x.Pet).Include(x => x.Service).FirstOrDefaultAsync(x => x.Id == id) ?? throw new Exception("Ô¤Ô¼ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½");
+        a.Status = AppointmentStatus.Completed;
         await _db.SaveChangesAsync();
 
-        _messageBus.Publish("appointment.status", new AppointmentStatusEvent(a.Id, a.UserId, 2, $"ÄúµÄÔ¤Ô¼£¨{a.Service.Name}£©ÒÑÍê³É£¬»¶Ó­ÆÀ¼Û£¡"));
+        await _messageBus.PublishAsync("appointment.status", new AppointmentStatusEvent(a.Id, a.UserId, 2, $"ï¿½ï¿½ï¿½ï¿½Ô¤Ô¼ï¿½ï¿½{a.Service.Name}ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½É£ï¿½ï¿½ï¿½Ó­ï¿½ï¿½ï¿½Û£ï¿½"));
 
         return MapAppointment(a);
     }
 
     public async Task<AppointmentDto> CancelAppointmentAsync(int id)
     {
-        var a = await _db.Appointments.Include(x => x.User).Include(x => x.Pet).Include(x => x.Service).FirstOrDefaultAsync(x => x.Id == id) ?? throw new Exception("Ô¤Ô¼²»´æÔÚ");
-        a.Status = 3;
+        var a = await _db.Appointments.Include(x => x.User).Include(x => x.Pet).Include(x => x.Service).FirstOrDefaultAsync(x => x.Id == id) ?? throw new Exception("Ô¤Ô¼ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½");
+        a.Status = AppointmentStatus.Cancelled;
         await _db.SaveChangesAsync();
 
-        _messageBus.Publish("appointment.status", new AppointmentStatusEvent(a.Id, a.UserId, 3, $"ÄúµÄÔ¤Ô¼£¨{a.Service.Name}£©ÒÑ±»È¡Ïû¡£"));
+        await _messageBus.PublishAsync("appointment.status", new AppointmentStatusEvent(a.Id, a.UserId, 3, $"ï¿½ï¿½ï¿½ï¿½Ô¤Ô¼ï¿½ï¿½{a.Service.Name}ï¿½ï¿½ï¿½Ñ±ï¿½È¡ï¿½ï¿½ï¿½ï¿½"));
 
         return MapAppointment(a);
     }
@@ -124,7 +125,7 @@ public class AdminService : IAdminService
         return await _db.Users
             .OrderByDescending(u => u.CreatedAt)
             .Select(u => new CustomerDto(
-                u.Id, u.Phone, u.Nickname, u.Role,
+                u.Id, u.Phone, u.Nickname, (int)u.Role,
                 u.Pets.Count,
                 u.Appointments.Count,
                 u.CreatedAt
@@ -134,7 +135,7 @@ public class AdminService : IAdminService
     private static ServiceDto MapService(Core.Entities.Service s) => new(s.Id, s.Name, s.Description, s.Category, s.PetType, s.Price, s.DurationMinutes, s.ImageUrl, s.SortOrder, s.IsActive);
 
     private static AppointmentDto MapAppointment(Appointment a) => new(
-        a.Id, a.UserId, a.PetId, a.ServiceId, a.AppointmentDate, a.TimeSlot, a.Status, a.Notes, a.CreatedAt,
+        a.Id, a.UserId, a.PetId, a.ServiceId, a.AppointmentDate, a.TimeSlot, (int)a.Status, a.Notes, a.CreatedAt,
         a.Pet.Name, a.Pet.Type, a.Service.Name, a.Service.Price,
         a.User.Nickname, a.User.Phone
     );

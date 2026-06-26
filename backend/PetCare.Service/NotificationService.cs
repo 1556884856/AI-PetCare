@@ -1,6 +1,7 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using PetCare.Core.Dtos;
 using PetCare.Core.Entities;
+using PetCare.Core.Enums;
 using PetCare.Core.Interfaces;
 using PetCare.Data;
 using PetCare.Service.Redis;

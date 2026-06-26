@@ -1,4 +1,4 @@
-﻿using System.Text;
+using System.Text;
 using System.Text.Json;
 using Microsoft.Extensions.Configuration;
 using PetCare.Core.Interfaces;
@@ -17,20 +17,23 @@ public class MessageBus : IMessageBus
         _exchangeName = configuration["RabbitMQ:ExchangeName"] ?? "petcare.events";
     }
 
-    public void Publish<T>(string routingKey, T message)
+    public async Task PublishAsync<T>(string routingKey, T message)
     {
         var json = JsonSerializer.Serialize(message);
         var body = Encoding.UTF8.GetBytes(json);
 
-        var props = _connection.Channel.CreateBasicProperties();
-        props.ContentType = "application/json";
-        props.DeliveryMode = 2;
-        props.MessageId = Guid.NewGuid().ToString();
-        props.Timestamp = new AmqpTimestamp(DateTimeOffset.UtcNow.ToUnixTimeSeconds());
+        var channel = await _connection.GetChannelAsync();
+        var props = new BasicProperties
+        {
+            ContentType = "application/json",
+            DeliveryMode = DeliveryModes.Persistent,
+            MessageId = Guid.NewGuid().ToString(),
+        };
 
-        _connection.Channel.BasicPublish(
+        await channel.BasicPublishAsync(
             exchange: _exchangeName,
             routingKey: routingKey,
+            mandatory: false,
             basicProperties: props,
             body: body
         );

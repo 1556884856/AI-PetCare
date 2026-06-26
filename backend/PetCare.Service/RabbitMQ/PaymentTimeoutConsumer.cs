@@ -1,4 +1,4 @@
-﻿using System.Text;
+using System.Text;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -7,6 +7,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using PetCare.Core.Events;
 using PetCare.Data;
+using PetCare.Core.Enums;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
 
@@ -40,31 +41,31 @@ public class PaymentTimeoutConsumer : BackgroundService
         {
             try
             {
-                if (!_connection.TryConnect())
+                if (!await _connection.TryConnectAsync())
                 {
                     _logger.LogWarning("PaymentTimeoutConsumer: RabbitMQ not available, retrying in 5s...");
                     await Task.Delay(5000, stoppingToken);
                     continue;
                 }
 
-                var channel = _connection.Channel;
+                var channel = await _connection.GetChannelAsync();
 
-                channel.ExchangeDeclare(_dlxName, ExchangeType.Topic, durable: true);
+                await channel.ExchangeDeclareAsync(_dlxName, ExchangeType.Topic, durable: true);
 
-                var args = new Dictionary<string, object>
+                var args = new Dictionary<string, object?>()
                 {
                     { "x-dead-letter-exchange", _dlxName },
                     { "x-dead-letter-routing-key", "payment.timeout" },
                     { "x-message-ttl", 1800000 }
                 };
-                channel.QueueDeclare(_queueName, durable: true, exclusive: false, autoDelete: false, args);
-                channel.QueueBind(_queueName, _exchangeName, "payment.timeout");
+                await channel.QueueDeclareAsync(_queueName, durable: true, exclusive: false, autoDelete: false, args);
+                await channel.QueueBindAsync(_queueName, _exchangeName, "payment.timeout");
 
-                channel.QueueDeclare(_dlxQueueName, durable: true, exclusive: false, autoDelete: false);
-                channel.QueueBind(_dlxQueueName, _dlxName, "payment.timeout");
+                await channel.QueueDeclareAsync(_dlxQueueName, durable: true, exclusive: false, autoDelete: false);
+                await channel.QueueBindAsync(_dlxQueueName, _dlxName, "payment.timeout");
 
                 var consumer = new AsyncEventingBasicConsumer(channel);
-                consumer.Received += async (_, ea) =>
+                consumer.ReceivedAsync += async (sender, ea) =>
                 {
                     try
                     {
@@ -77,26 +78,26 @@ public class PaymentTimeoutConsumer : BackgroundService
                             var db = scope.ServiceProvider.GetRequiredService<PetCareDbContext>();
 
                             var payment = await db.Payments.FindAsync(timeoutEvent.PaymentId);
-                            if (payment != null && payment.Status == 0)
+                            if (payment != null && payment.Status == PaymentStatus.Pending)
                             {
-                                payment.Status = 2;
+                                payment.Status = PaymentStatus.Refunded;
                                 var appointment = await db.Appointments.FindAsync(timeoutEvent.AppointmentId);
-                                if (appointment != null) appointment.Status = 3;
+                                if (appointment != null) appointment.Status = AppointmentStatus.Cancelled;
                                 await db.SaveChangesAsync();
                                 _logger.LogInformation("Payment {PaymentId} timeout, auto-cancelled", timeoutEvent.PaymentId);
                             }
                         }
 
-                        channel.BasicAck(ea.DeliveryTag, false);
+                        await channel.BasicAckAsync(ea.DeliveryTag, false);
                     }
                     catch (Exception ex)
                     {
                         _logger.LogError(ex, "PaymentTimeoutConsumer message error");
-                        try { channel.BasicNack(ea.DeliveryTag, false, true); } catch { }
+                        try { await channel.BasicNackAsync(ea.DeliveryTag, false, true); } catch { }
                     }
                 };
 
-                channel.BasicConsume(_dlxQueueName, false, consumer);
+                await channel.BasicConsumeAsync(_dlxQueueName, false, consumer);
 
                 try { await Task.Delay(Timeout.Infinite, stoppingToken); }
                 catch (OperationCanceledException) { }

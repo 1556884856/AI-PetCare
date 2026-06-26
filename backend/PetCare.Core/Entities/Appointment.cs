@@ -1,4 +1,5 @@
-﻿namespace PetCare.Core.Entities;
+using PetCare.Core.Enums;
+namespace PetCare.Core.Entities;
 
 public class Appointment
 {
@@ -8,7 +9,7 @@ public class Appointment
     public int ServiceId { get; set; }
     public DateTime AppointmentDate { get; set; }
     public string TimeSlot { get; set; } = string.Empty;
-    public int Status { get; set; } = 0;
+    public AppointmentStatus Status { get; set; } = AppointmentStatus.Pending;
     public string Notes { get; set; } = string.Empty;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 

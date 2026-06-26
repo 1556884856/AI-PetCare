@@ -1,4 +1,5 @@
-﻿namespace PetCare.Core.Entities;
+using PetCare.Core.Enums;
+namespace PetCare.Core.Entities;
 
 public class User
 {
@@ -6,7 +7,7 @@ public class User
     public string Phone { get; set; } = string.Empty;
     public string Nickname { get; set; } = string.Empty;
     public string AvatarUrl { get; set; } = string.Empty;
-    public int Role { get; set; } = 0;
+    public UserRole Role { get; set; } = UserRole.Customer;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     public ICollection<Pet> Pets { get; set; } = new List<Pet>();
