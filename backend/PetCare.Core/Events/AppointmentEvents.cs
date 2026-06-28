@@ -1,7 +1,13 @@
-﻿namespace PetCare.Core.Events;
+namespace PetCare.Core.Events;
 
+// ===================================================================
+// 预约相关领域事件，通过 RabbitMQ 发布，由 NotificationConsumer 消费
+// ===================================================================
+
+/// <summary>预约事件基类，包含预约ID、用户ID和事件类型</summary>
 public record AppointmentEvent(int AppointmentId, int UserId, string? Type);
 
+/// <summary>预约创建事件：用户提交新预约时发布</summary>
 public record AppointmentCreatedEvent : AppointmentEvent
 {
     public string PetName { get; init; } = string.Empty;
@@ -19,6 +25,7 @@ public record AppointmentCreatedEvent : AppointmentEvent
     }
 }
 
+/// <summary>预约状态变更事件：管理员确认/完成/取消预约时发布</summary>
 public record AppointmentStatusEvent : AppointmentEvent
 {
     public int Status { get; init; }
@@ -32,6 +39,7 @@ public record AppointmentStatusEvent : AppointmentEvent
     }
 }
 
+/// <summary>支付完成事件：用户支付成功后发布，用于通知用户</summary>
 public record PaymentCompletedEvent
 {
     public int PaymentId { get; init; }

@@ -5,6 +5,11 @@ using PetCare.Data;
 
 namespace PetCare.Data.Repositories;
 
+/// <summary>
+/// 通用仓储实现，封装了 Entity Framework Core 的基本 CRUD 操作。
+/// 泛型 T 代表实体类型，通过依赖注入获取 PetCareDbContext。
+/// </summary>
+/// <typeparam name="T">实体类型</typeparam>
 public class Repository<T> : IRepository<T> where T : class
 {
     protected readonly PetCareDbContext _db;
@@ -43,6 +48,7 @@ public class Repository<T> : IRepository<T> where T : class
 
     public void Delete(T entity) => _set.Remove(entity);
 
+    /// <summary>将所有挂起的变更保存到数据库</summary>
     public async Task<int> SaveChangesAsync(CancellationToken ct = default)
         => await _db.SaveChangesAsync(ct);
 }

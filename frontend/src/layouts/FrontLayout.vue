@@ -3,7 +3,7 @@
     <header class="header">
       <div class="header-inner">
         <router-link to="/" class="logo">
-          <span class="logo-icon">🐾</span>
+          <img src="/paw.svg" class="logo-icon" alt="Pet Care" />
           <span class="logo-text">Pet Care</span>
         </router-link>
         <nav class="nav">
@@ -107,7 +107,7 @@ const handleLogout = () => {
   gap: 8px;
   color: #fff;
 }
-.logo-icon { font-size: 28px; }
+.logo-icon { width: 28px; height: 28px; }
 .logo-text {
   font-family: 'Varela Round', sans-serif;
   font-size: 22px;

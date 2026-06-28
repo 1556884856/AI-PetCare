@@ -1,11 +1,10 @@
-﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
 using PetCare.Core.Dtos;
 using PetCare.Core.Interfaces;
-
 namespace PetCare.Api.Controllers;
-
+/// <summary>预约控制器，用户管理自己的预约（需要认证）</summary>
 [ApiController]
 [Route("api/v1/[controller]")]
 [Authorize]
@@ -13,7 +12,7 @@ public class AppointmentsController : ControllerBase
 {
     private readonly IAppointmentService _appointmentService;
     public AppointmentsController(IAppointmentService appointmentService) { _appointmentService = appointmentService; }
-
+    /// <summary>获取当前用户的预约列表，可按状态筛选</summary>
     [HttpGet]
     public async Task<IActionResult> GetMyAppointments([FromQuery] int? status)
     {
@@ -21,7 +20,7 @@ public class AppointmentsController : ControllerBase
         var list = await _appointmentService.GetUserAppointmentsAsync(userId, status);
         return Ok(new { data = list });
     }
-
+    /// <summary>创建预约</summary>
     [HttpPost]
     public async Task<IActionResult> Create([FromBody] CreateAppointmentRequest req)
     {
@@ -29,7 +28,7 @@ public class AppointmentsController : ControllerBase
         var app = await _appointmentService.CreateAppointmentAsync(userId, req);
         return Ok(new { data = app });
     }
-
+    /// <summary>取消预约</summary>
     [HttpPut("{id}/cancel")]
     public async Task<IActionResult> Cancel(int id)
     {
@@ -37,7 +36,7 @@ public class AppointmentsController : ControllerBase
         await _appointmentService.CancelAppointmentAsync(userId, id);
         return Ok(new { message = "已取消" });
     }
-
+    /// <summary>获取可用时段（目前返回固定的全部时段）</summary>
     [HttpGet("available-slots")]
     public async Task<IActionResult> GetAvailableSlots([FromQuery] string date)
     {

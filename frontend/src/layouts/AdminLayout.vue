@@ -2,12 +2,12 @@
   <div class="admin-layout">
     <aside class="sidebar">
       <div class="sidebar-header">
-        <router-link to="/admin" class="sidebar-logo">🐾 后台管理</router-link>
+        <router-link to="/admin" class="sidebar-logo"><img src="/paw.svg" class="sidebar-logo-icon" alt="" /> 后台管理</router-link>
       </div>
       <el-menu
         :default-active="$route.path"
         router
-        background-color="#0F766E"
+        :style="{ backgroundColor: 'var(--primary)' }"
         text-color="rgba(255,255,255,0.8)"
         active-text-color="#fff"
         class="sidebar-menu"

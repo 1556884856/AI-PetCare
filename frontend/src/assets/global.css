@@ -10,6 +10,13 @@
   --muted: #78716C;
   --border: #E7E5E4;
   --danger: #DC2626;
+  --space-xs: 8px;
+  --space-sm: 12px;
+  --space-md: 16px;
+  --space-lg: 24px;
+  --space-xl: 32px;
+  --space-2xl: 48px;
+  --space-3xl: 64px;
   --radius-sm: 10px;
   --radius-md: 16px;
   --radius-lg: 20px;

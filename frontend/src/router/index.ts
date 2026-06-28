@@ -1,5 +1,9 @@
-﻿import { createRouter, createWebHistory } from 'vue-router'
-
+// ===================================================================
+// Vue Router 路由配置
+// 前台路由（/）使用 FrontLayout，后台路由（/admin）使用 AdminLayout
+// 路由守卫：检查认证状态和管理员权限
+// ===================================================================
+import { createRouter, createWebHistory } from 'vue-router'
 const router = createRouter({
   history: createWebHistory(),
   routes: [
@@ -37,20 +41,19 @@ const router = createRouter({
     }
   ]
 })
-
+// 全局前置守卫：认证检查和管理员权限检查
 router.beforeEach((to, _from, next) => {
   const token = localStorage.getItem('token')
   if (to.meta.requiresAuth && !token) {
-    next('/login')
+    next('/login')  // 未登录 → 跳转登录页
   } else if (to.meta.requiresAdmin) {
     const userStr = localStorage.getItem('user')
     if (!userStr) { next('/login'); return }
     const user = JSON.parse(userStr)
-    if (user.role !== 2) { next('/'); return }
+    if (user.role !== 2) { next('/'); return }  // 非管理员 → 跳转首页
     next()
   } else {
     next()
   }
 })
-
 export default router

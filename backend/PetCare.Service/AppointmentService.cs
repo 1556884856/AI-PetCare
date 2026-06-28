@@ -5,15 +5,17 @@ using PetCare.Core.Enums;
 using PetCare.Core.Events;
 using PetCare.Core.Interfaces;
 using PetCare.Data;
-
 namespace PetCare.Service;
-
+/// <summary>
+/// 预约服务实现，处理用户端的预约创建、查询和取消。
+/// 创建预约时检查时段冲突，并发布 AppointmentCreatedEvent 到消息总线。
+/// </summary>
 public class AppointmentService : IAppointmentService
 {
     private readonly PetCareDbContext _db;
     private readonly IMessageBus _messageBus;
     public AppointmentService(PetCareDbContext db, IMessageBus messageBus) { _db = db; _messageBus = messageBus; }
-
+    /// <summary>获取用户预约列表，按日期和时段排序，支持状态筛选</summary>
     public async Task<List<AppointmentDto>> GetUserAppointmentsAsync(int userId, int? status)
     {
         var q = _db.Appointments.Where(a => a.UserId == userId).Include(a => a.Pet).Include(a => a.Service).AsQueryable();
@@ -23,15 +25,14 @@ public class AppointmentService : IAppointmentService
             a.Pet.Name, a.Pet.Type, a.Service.Name, a.Service.Price, null, null
         )).ToListAsync();
     }
-
+    /// <summary>创建新预约。检查宠物归属、服务可用性、时段冲突，创建成功后发布事件通知。</summary>
     public async Task<AppointmentDto> CreateAppointmentAsync(int userId, CreateAppointmentRequest r)
     {
         var pet = await _db.Pets.FirstOrDefaultAsync(p => p.Id == r.PetId && p.UserId == userId) ?? throw new Exception("宠物不存在");
         var service = await _db.Services.FirstOrDefaultAsync(s => s.Id == r.ServiceId && s.IsActive) ?? throw new Exception("服务不存在");
-
+        // 检查时段是否已被占用（排除已取消的预约）
         var existing = await _db.Appointments.AnyAsync(a => a.AppointmentDate.Date == r.AppointmentDate.Date && a.TimeSlot == r.TimeSlot && a.Status != AppointmentStatus.Cancelled);
         if (existing) throw new Exception("该时段已被预约");
-
         var app = new Appointment
         {
             UserId = userId, PetId = r.PetId, ServiceId = r.ServiceId,
@@ -40,16 +41,11 @@ public class AppointmentService : IAppointmentService
         };
         _db.Appointments.Add(app);
         await _db.SaveChangesAsync();
-
         // 发布预约创建事件 → 通知系统异步处理
-        await _messageBus.PublishAsync("appointment.created", new AppointmentCreatedEvent(
-            app.Id, userId, pet.Name, service.Name, app.AppointmentDate, app.TimeSlot
-        ));
-
-        return new AppointmentDto(app.Id, app.UserId, app.PetId, app.ServiceId, app.AppointmentDate, app.TimeSlot, (int)app.Status, app.Notes, app.CreatedAt,
-            pet.Name, pet.Type, service.Name, service.Price, null, null);
+        await _messageBus.PublishAsync("appointment.created", new AppointmentCreatedEvent(app.Id, userId, pet.Name, service.Name, app.AppointmentDate, app.TimeSlot));
+        return new AppointmentDto(app.Id, app.UserId, app.PetId, app.ServiceId, app.AppointmentDate, app.TimeSlot, (int)app.Status, app.Notes, app.CreatedAt, pet.Name, pet.Type, service.Name, service.Price, null, null);
     }
-
+    /// <summary>取消预约（已完成的不允许取消）</summary>
     public async Task CancelAppointmentAsync(int userId, int appointmentId)
     {
         var app = await _db.Appointments.FirstOrDefaultAsync(a => a.Id == appointmentId && a.UserId == userId) ?? throw new Exception("预约不存在");

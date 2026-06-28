@@ -5,43 +5,35 @@ using PetCare.Core.Events;
 using PetCare.Core.Interfaces;
 using PetCare.Data;
 using PetCare.Core.Enums;
-
 namespace PetCare.Service;
-
+/// <summary>
+/// 管理员服务实现，提供仪表盘统计、预约管理、服务管理和客户查询等功能。
+/// 操作时发布对应的状态变更事件到消息总线，由通知消费者处理。
+/// </summary>
 public class AdminService : IAdminService
 {
     private readonly PetCareDbContext _db;
     private readonly IMessageBus _messageBus;
     public AdminService(PetCareDbContext db, IMessageBus messageBus) { _db = db; _messageBus = messageBus; }
-
+    /// <summary>获取仪表盘数据：今日预约数、待确认数、今日营收、本月新客户</summary>
     public async Task<DashboardDto> GetDashboardAsync()
     {
         var today = DateTime.UtcNow.Date;
         var startOfMonth = new DateTime(today.Year, today.Month, 1);
-
         var todayApps = await _db.Appointments.CountAsync(a => a.AppointmentDate.Date == today);
         var pendingApps = await _db.Appointments.CountAsync(a => a.Status == AppointmentStatus.Pending);
         var todayRevenue = await _db.Payments.Where(p => (int)p.Status == (int)PaymentStatus.Paid && p.PaidAt.HasValue && p.PaidAt.Value.Date == today).SumAsync(p => p.FinalAmount);
         var monthNew = await _db.Users.CountAsync(u => u.CreatedAt >= startOfMonth);
-
         var todayList = await GetTodayAppointmentsAsync(today);
-
-        return new DashboardDto(
-            new DashboardStatsDto(todayApps, pendingApps, todayRevenue, monthNew),
-            todayList
-        );
+        return new DashboardDto(new DashboardStatsDto(todayApps, pendingApps, todayRevenue, monthNew), todayList);
     }
-
     private async Task<List<AppointmentDto>> GetTodayAppointmentsAsync(DateTime today)
     {
-        return await _db.Appointments
-            .Where(a => a.AppointmentDate.Date == today)
+        return await _db.Appointments.Where(a => a.AppointmentDate.Date == today)
             .Include(a => a.User).Include(a => a.Pet).Include(a => a.Service)
             .OrderBy(a => a.TimeSlot)
-            .Select(a => MapAppointment(a))
-            .ToListAsync();
+            .Select(a => MapAppointment(a)).ToListAsync();
     }
-
     public async Task<List<ServiceDto>> GetServicesAsync(string? category, string? petType)
     {
         var q = _db.Services.AsQueryable();
@@ -49,36 +41,19 @@ public class AdminService : IAdminService
         if (!string.IsNullOrEmpty(petType)) q = q.Where(s => s.PetType == petType || s.PetType == "All");
         return await q.OrderBy(s => s.SortOrder).Select(s => MapService(s)).ToListAsync();
     }
-
-    public async Task<ServiceDto?> GetServiceAsync(int id)
-    {
-        var s = await _db.Services.FindAsync(id);
-        return s == null ? null : MapService(s);
-    }
-
+    public async Task<ServiceDto?> GetServiceAsync(int id) { var s = await _db.Services.FindAsync(id); return s == null ? null : MapService(s); }
     public async Task<ServiceDto> CreateServiceAsync(CreateServiceRequest r)
     {
         var s = new Core.Entities.Service { Name = r.Name, Description = r.Description, Category = r.Category, PetType = r.PetType, Price = r.Price, DurationMinutes = r.DurationMinutes, SortOrder = r.SortOrder };
-        _db.Services.Add(s);
-        await _db.SaveChangesAsync();
-        return MapService(s);
+        _db.Services.Add(s); await _db.SaveChangesAsync(); return MapService(s);
     }
-
     public async Task<ServiceDto> UpdateServiceAsync(int id, UpdateServiceRequest r)
     {
-        var s = await _db.Services.FindAsync(id) ?? throw new Exception("���񲻴���");
+        var s = await _db.Services.FindAsync(id) ?? throw new Exception("服务不存在");
         s.Name = r.Name; s.Description = r.Description; s.Category = r.Category; s.PetType = r.PetType; s.Price = r.Price; s.DurationMinutes = r.DurationMinutes; s.SortOrder = r.SortOrder; s.IsActive = r.IsActive;
-        await _db.SaveChangesAsync();
-        return MapService(s);
+        await _db.SaveChangesAsync(); return MapService(s);
     }
-
-    public async Task DeleteServiceAsync(int id)
-    {
-        var s = await _db.Services.FindAsync(id) ?? throw new Exception("���񲻴���");
-        _db.Services.Remove(s);
-        await _db.SaveChangesAsync();
-    }
-
+    public async Task DeleteServiceAsync(int id) { var s = await _db.Services.FindAsync(id) ?? throw new Exception("服务不存在"); _db.Services.Remove(s); await _db.SaveChangesAsync(); }
     public async Task<List<AppointmentDto>> GetAllAppointmentsAsync(string? date, int? status)
     {
         var q = _db.Appointments.Include(a => a.User).Include(a => a.Pet).Include(a => a.Service).AsQueryable();
@@ -86,57 +61,36 @@ public class AdminService : IAdminService
         if (status.HasValue) q = q.Where(a => (int)a.Status == status.Value);
         return await q.OrderByDescending(a => a.AppointmentDate).ThenBy(a => a.TimeSlot).Select(a => MapAppointment(a)).ToListAsync();
     }
-
+    /// <summary>确认预约 → 发布状态变更事件通知用户</summary>
     public async Task<AppointmentDto> ConfirmAppointmentAsync(int id)
     {
-        var a = await _db.Appointments.Include(x => x.User).Include(x => x.Pet).Include(x => x.Service).FirstOrDefaultAsync(x => x.Id == id) ?? throw new Exception("ԤԼ������");
-        a.Status = AppointmentStatus.Confirmed;
-        await _db.SaveChangesAsync();
-
-        await _messageBus.PublishAsync("appointment.status", new AppointmentStatusEvent(a.Id, a.UserId, 1, $"����ԤԼ��{a.Service.Name}����ȷ�ϣ��밴ʱ���ꡣ"));
-
+        var a = await _db.Appointments.Include(x => x.User).Include(x => x.Pet).Include(x => x.Service).FirstOrDefaultAsync(x => x.Id == id) ?? throw new Exception("预约不存在");
+        a.Status = AppointmentStatus.Confirmed; await _db.SaveChangesAsync();
+        await _messageBus.PublishAsync("appointment.status", new AppointmentStatusEvent(a.Id, a.UserId, 1, $"您的预约[{a.Service.Name}]已确认，请按时到店。"));
         return MapAppointment(a);
     }
-
+    /// <summary>完成预约 → 发布状态变更事件</summary>
     public async Task<AppointmentDto> CompleteAppointmentAsync(int id)
     {
-        var a = await _db.Appointments.Include(x => x.User).Include(x => x.Pet).Include(x => x.Service).FirstOrDefaultAsync(x => x.Id == id) ?? throw new Exception("ԤԼ������");
-        a.Status = AppointmentStatus.Completed;
-        await _db.SaveChangesAsync();
-
-        await _messageBus.PublishAsync("appointment.status", new AppointmentStatusEvent(a.Id, a.UserId, 2, $"����ԤԼ��{a.Service.Name}������ɣ���ӭ���ۣ�"));
-
+        var a = await _db.Appointments.Include(x => x.User).Include(x => x.Pet).Include(x => x.Service).FirstOrDefaultAsync(x => x.Id == id) ?? throw new Exception("预约不存在");
+        a.Status = AppointmentStatus.Completed; await _db.SaveChangesAsync();
+        await _messageBus.PublishAsync("appointment.status", new AppointmentStatusEvent(a.Id, a.UserId, 2, $"您的预约[{a.Service.Name}]已完成，欢迎再次光临！"));
         return MapAppointment(a);
     }
-
+    /// <summary>取消预约（管理员）→ 发布状态变更事件</summary>
     public async Task<AppointmentDto> CancelAppointmentAsync(int id)
     {
-        var a = await _db.Appointments.Include(x => x.User).Include(x => x.Pet).Include(x => x.Service).FirstOrDefaultAsync(x => x.Id == id) ?? throw new Exception("ԤԼ������");
-        a.Status = AppointmentStatus.Cancelled;
-        await _db.SaveChangesAsync();
-
-        await _messageBus.PublishAsync("appointment.status", new AppointmentStatusEvent(a.Id, a.UserId, 3, $"����ԤԼ��{a.Service.Name}���ѱ�ȡ����"));
-
+        var a = await _db.Appointments.Include(x => x.User).Include(x => x.Pet).Include(x => x.Service).FirstOrDefaultAsync(x => x.Id == id) ?? throw new Exception("预约不存在");
+        a.Status = AppointmentStatus.Cancelled; await _db.SaveChangesAsync();
+        await _messageBus.PublishAsync("appointment.status", new AppointmentStatusEvent(a.Id, a.UserId, 3, $"您的预约[{a.Service.Name}]已被取消"));
         return MapAppointment(a);
     }
-
     public async Task<List<CustomerDto>> GetCustomersAsync()
     {
-        return await _db.Users
-            .OrderByDescending(u => u.CreatedAt)
-            .Select(u => new CustomerDto(
-                u.Id, u.Phone, u.Nickname, (int)u.Role,
-                u.Pets.Count,
-                u.Appointments.Count,
-                u.CreatedAt
-            )).ToListAsync();
+        return await _db.Users.OrderByDescending(u => u.CreatedAt)
+            .Select(u => new CustomerDto(u.Id, u.Phone, u.Nickname, (int)u.Role, u.Pets.Count, u.Appointments.Count, u.CreatedAt))
+            .ToListAsync();
     }
-
     private static ServiceDto MapService(Core.Entities.Service s) => new(s.Id, s.Name, s.Description, s.Category, s.PetType, s.Price, s.DurationMinutes, s.ImageUrl, s.SortOrder, s.IsActive);
-
-    private static AppointmentDto MapAppointment(Appointment a) => new(
-        a.Id, a.UserId, a.PetId, a.ServiceId, a.AppointmentDate, a.TimeSlot, (int)a.Status, a.Notes, a.CreatedAt,
-        a.Pet.Name, a.Pet.Type, a.Service.Name, a.Service.Price,
-        a.User.Nickname, a.User.Phone
-    );
+    private static AppointmentDto MapAppointment(Appointment a) => new(a.Id, a.UserId, a.PetId, a.ServiceId, a.AppointmentDate, a.TimeSlot, (int)a.Status, a.Notes, a.CreatedAt, a.Pet.Name, a.Pet.Type, a.Service.Name, a.Service.Price, a.User.Nickname, a.User.Phone);
 }

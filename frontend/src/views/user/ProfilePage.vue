@@ -72,11 +72,10 @@ const save = async () => {
   display: block;
   padding: 14px 20px;
   font-size: 14px;
-  border-left: 3px solid transparent;
   transition: all var(--transition);
 }
 .nav-link:hover { background: var(--primary-bg); }
-.nav-link.active { border-left-color: var(--primary); color: var(--primary); background: var(--primary-bg); font-weight: 600; }
+.nav-link.active { color: var(--primary); background: var(--primary-bg); font-weight: 600; }
 .me-content { flex: 1; background: #fff; border-radius: var(--radius-md); padding: 32px; box-shadow: var(--shadow-card); }
 .me-content h2 { font-size: 22px; margin-bottom: 24px; }
 @media (max-width: 768px) { .me-layout { flex-direction: column; } .me-nav { width: 100%; } }

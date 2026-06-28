@@ -100,7 +100,7 @@ const features = [
   font-weight: 600;
   transition: all var(--transition);
 }
-.btn-primary:hover { background: #E08F00; transform: translateY(-1px); }
+.btn-primary:hover { background: color-mix(in srgb, var(--secondary) 85%, black); transform: translateY(-1px); }
 .btn-outline {
   display: inline-block;
   color: var(--primary);
